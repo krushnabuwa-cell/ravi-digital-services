@@ -11,8 +11,8 @@ export default {
 
     if (url.pathname === "/api/config") {
       return Response.json({
-        supabaseUrl: env.SUPABASE_URL || "",
-        supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY || ""
+        supabaseUrl: env.SUPABASE_URL || "https://zurjduivdbijdkbxfuqm.supabase.co",
+        supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY || "sb_publishable_T9_m-r-DPP1SS7Uvw23PUw_U-PWUWrP"
       });
     }
 
