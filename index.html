@@ -202,9 +202,9 @@ async function rdsSetRetailerApproval(id,status){
 }
 async function rdsRefreshApplications(){
   if(!rdsSupabase||!rdsSession)return;
-  const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,retailer_id,created_by,services(name)').order('created_at',{ascending:false}).limit(300);
+  const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,retailer_id,created_by,services(name),commissions(amount)').order('created_at',{ascending:false}).limit(300);
   if(error)throw error;
-  enquiries=(data||[]).map(x=>({id:x.id,workCode:x.work_id,date:new Date(x.created_at).toLocaleString('en-IN'),name:x.customer_name,phone:x.customer_mobile,service:x.services?.name||'Service',city:'',details:x.notes||'',status:x.status,retailerId:x.retailer_id||'Direct',govtFee:Number(x.government_fee)||0,serviceCharge:Number(x.service_charge)||0,customerTotal:Number(x.total_amount)||0,commission:0,documents:[]}));
+  enquiries=(data||[]).map(x=>({id:x.id,workCode:x.work_id,date:new Date(x.created_at).toLocaleString('en-IN'),name:x.customer_name,phone:x.customer_mobile,service:x.services?.name||'Service',city:'',details:x.notes||'',status:x.status,retailerId:x.retailer_id||'Direct',govtFee:Number(x.government_fee)||0,serviceCharge:Number(x.service_charge)||0,customerTotal:Number(x.total_amount)||0,commission:(x.commissions||[]).reduce((sum,c)=>sum+(Number(c.amount)||0),0),documents:[]}));
   renderAdmin();
   if(rdsProfile?.role==='retailer')renderRetailerDash();
   if(rdsProfile?.role==='staff')renderStaff();
