@@ -153,7 +153,7 @@ async function verifyLoginOtp(){
 function rdsShowRoleDashboard(){
   if(!rdsSession||!rdsProfile)return;
   const role=rdsProfile.role;
-  if(role==='admin'){page('admin');rdsRefreshApplications().catch(e=>console.error(e));return;}
+  if(role==='admin'){page('admin');rdsRefreshApplications().catch(e=>console.error(e));rdsLoadRetailerApplications().catch(e=>console.error(e));return;}
   if(role==='staff'){$('homePage').classList.add('hidden');$('retailerPage').classList.add('hidden');$('trackPage').classList.add('hidden');$('loginPage').classList.add('hidden');$('adminPage').classList.add('hidden');$('staffDash').classList.remove('hidden');rdsRefreshApplications().catch(e=>console.error(e));return;}
   if(role==='retailer'){currentRole='retailer';currentRetailerId=rdsSession.user.id;$('homePage').classList.add('hidden');$('retailerPage').classList.add('hidden');$('trackPage').classList.add('hidden');$('loginPage').classList.add('hidden');$('adminPage').classList.add('hidden');$('retailerDash').classList.remove('hidden');renderRetailerDash();return;}
   page('home');
@@ -188,7 +188,19 @@ async function rdsCreateApplication({name,phone,serviceName,notes,retailerId=nul
   }
   return app;
 }
-async async function rdsRefreshApplications(){
+async async function rdsLoadRetailerApplications(){
+  if(!rdsSupabase||rdsProfile?.role!=='admin')return;
+  const {data,error}=await rdsSupabase.from('retailer_applications').select('id,user_id,shop_name,owner_name,mobile,email,city,business_type,status,created_at').order('created_at',{ascending:false}).limit(300);
+  if(error){console.error('Retailer applications:',error);return;}
+  $('retailerRows').innerHTML=(data||[]).map(x=>'<tr><td>'+esc(x.shop_name)+'<br><span class="small">'+esc(x.user_id)+'</span></td><td>'+esc(x.owner_name)+'</td><td>'+esc(x.mobile)+'<br>'+esc(x.email||'')+'</td><td>'+esc(x.city)+'</td><td>'+esc(x.business_type||'')+'</td><td><select onchange="rdsSetRetailerApproval(\''+esc(x.id)+'\',this.value)">'+['Pending','Approved','On Hold','Rejected'].map(st=>'<option '+(x.status===st?'selected':'')+'>'+st+'</option>').join('')+'</select></td></tr>').join('')||'<tr><td colspan="6">अद्याप retailer applications नाहीत.</td></tr>';
+}
+async function rdsSetRetailerApproval(id,status){
+  const {error}=await rdsSupabase.from('retailer_applications').update({status,updated_at:new Date().toISOString()}).eq('id',id);
+  if(error){alert('Approval update failed: '+error.message);return;}
+  await rdsLoadRetailerApplications();
+  alert(status==='Approved'?'Retailer मंजूर झाला. पुढील OTP Login पासून Retailer Dashboard उघडेल.':'Retailer application status update झाला.');
+}
+async function rdsRefreshApplications(){
   if(!rdsSupabase||!rdsSession)return;
   const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,retailer_id,created_by,services(name)').order('created_at',{ascending:false}).limit(300);
   if(error)throw error;
