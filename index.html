@@ -93,7 +93,7 @@ function page(p){
   if(p==='mywork')renderCustomerDash();
   if(p==='staff')rdsRefreshApplications().catch(e=>console.error(e));
   if(p==='subcafe')rdsRefreshApplications().catch(e=>console.error(e));
-  if(p==='hr')rdsLoadHrDashboard().catch(e=>console.error(e));
+  if(p==='hr'){rdsLoadProfiles().catch(e=>console.error(e));rdsLoadHrDashboard().catch(e=>console.error(e));}
   document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
   let nav={home:'navHome',partner:'navPartner',mywork:'navMyWork',track:'navTrack',login:'navLogin',admin:'navAdmin'};
   if(nav[p])$(nav[p]).classList.add('active');
@@ -274,13 +274,15 @@ async function rdsSetPartnerEnquiryStatus(id,status){
   await rdsLoadPartnerEnquiries();
 }
 async function rdsLoadProfiles(){
-  if(!rdsSupabase||rdsProfile?.role!=='admin')return;
+  if(!rdsSupabase||!['admin','hr'].includes(rdsProfile?.role))return;
   const {data,error}=await rdsSupabase.from('profiles').select('id,full_name,mobile,role').order('created_at',{ascending:false}).limit(500);
   if(error)throw error;
   const roles=['customer','staff','admin','sub_cafe','backend_operator','hr'];
   $('profileRows').innerHTML=(data||[]).map(p=>'<tr><td>'+esc(p.full_name||'—')+'<br><span class="small">'+esc(p.id)+'</span></td><td>'+esc(p.mobile||'—')+'</td><td>'+esc(p.role)+'</td><td><select onchange="rdsSetProfileRole(\\''+esc(p.id)+'\\',this.value)">'+roles.map(r=>'<option '+(p.role===r?'selected':'')+'>'+r+'</option>').join('')+'</select></td></tr>').join('');
-  const branchProfiles=(data||[]).filter(p=>p.role==='sub_cafe');
-  $('branchProfileId').innerHTML='<option value="">Select Sub Cafe profile</option>'+branchProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+'</option>').join('');
+  if(rdsProfile?.role==='admin'){
+    const branchProfiles=(data||[]).filter(p=>p.role==='sub_cafe');
+    $('branchProfileId').innerHTML='<option value="">Select Sub Cafe profile</option>'+branchProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+'</option>').join('');
+  }
   const employeeProfiles=(data||[]).filter(p=>['staff','backend_operator','hr'].includes(p.role));
   $('employeeProfileId').innerHTML='<option value="">Select employee profile</option>'+employeeProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+' ('+esc(p.role)+')</option>').join('');
 }
@@ -342,7 +344,7 @@ function renderSubCafeDash(){
   body.innerHTML=enquiries.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.service)+'</td><td>'+esc(x.workCode)+'</td><td>'+esc(x.status)+'</td></tr>').join('')||'<tr><td colspan="5">अद्याप काम नाही.</td></tr>';
 }
 async function rdsLoadHrDashboard(){
-  if(!rdsSupabase||rdsProfile?.role!=='hr')return;
+  if(!rdsSupabase||!['hr','admin'].includes(rdsProfile?.role))return;
   const [employees,leaves]=await Promise.all([
     rdsSupabase.from('employees').select('id,employee_code,full_name,department,designation,employment_status').order('full_name'),
     rdsSupabase.from('leave_requests').select('id,from_date,to_date,reason,leave_status,employees(full_name,employee_code)').order('created_at',{ascending:false}).limit(200)
