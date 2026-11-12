@@ -262,6 +262,98 @@ async function rdsSetPartnerEnquiryStatus(id,status){
   if(error){alert('Business partner enquiry update failed: '+error.message);return;}
   await rdsLoadPartnerEnquiries();
 }
+async function rdsLoadProfiles(){
+  if(!rdsSupabase||rdsProfile?.role!=='admin')return;
+  const {data,error}=await rdsSupabase.from('profiles').select('id,full_name,mobile,role').order('created_at',{ascending:false}).limit(500);
+  if(error)throw error;
+  const roles=['customer','staff','admin','sub_cafe','backend_operator','hr'];
+  $('profileRows').innerHTML=(data||[]).map(p=>'<tr><td>'+esc(p.full_name||'—')+'<br><span class="small">'+esc(p.id)+'</span></td><td>'+esc(p.mobile||'—')+'</td><td>'+esc(p.role)+'</td><td><select onchange="rdsSetProfileRole(\\''+esc(p.id)+'\\',this.value)">'+roles.map(r=>'<option '+(p.role===r?'selected':'')+'>'+r+'</option>').join('')+'</select></td></tr>').join('');
+  const branchProfiles=(data||[]).filter(p=>p.role==='sub_cafe');
+  $('branchProfileId').innerHTML='<option value="">Select Sub Cafe profile</option>'+branchProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+'</option>').join('');
+  const employeeProfiles=(data||[]).filter(p=>['staff','backend_operator','hr'].includes(p.role));
+  $('employeeProfileId').innerHTML='<option value="">Select employee profile</option>'+employeeProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+' ('+esc(p.role)+')</option>').join('');
+}
+async function rdsSetProfileRole(id,role){
+  const allowed=['customer','staff','admin','sub_cafe','backend_operator','hr'];
+  if(!allowed.includes(role)){alert('Invalid role');return;}
+  const {error}=await rdsSupabase.from('profiles').update({role}).eq('id',id);
+  if(error){alert('Role update failed: '+error.message);return;}
+  await rdsLoadProfiles();
+  await rdsLoadOperationalUsers();
+}
+async function rdsLoadOperationalUsers(){
+  if(!rdsSupabase||rdsProfile?.role!=='admin')return;
+  const {data,error}=await rdsSupabase.from('profiles').select('id,full_name,role').in('role',['staff','backend_operator']).order('full_name');
+  if(error)throw error;
+  operationalUsers=data||[];
+  renderAdmin();
+}
+async function rdsLoadSubCafes(){
+  if(!rdsSupabase||rdsProfile?.role!=='admin')return;
+  const {data,error}=await rdsSupabase.from('sub_cafes').select('id,business_name,owner_name,mobile,city,status').order('created_at',{ascending:false});
+  if(error)throw error;
+  $('branchRows').innerHTML=(data||[]).map(x=>'<tr><td>'+esc(x.business_name)+'</td><td>'+esc(x.owner_name||'—')+'</td><td>'+esc(x.city)+'</td><td>'+esc(x.status)+'</td></tr>').join('')||'<tr><td colspan="4">अद्याप शाखा नाही.</td></tr>';
+}
+$('subCafeForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    const row={profile_id:$('branchProfileId').value,business_name:$('branchBusinessName').value.trim(),owner_name:$('branchOwnerName').value.trim()||null,mobile:$('branchMobile').value.trim()||null,city:$('branchCity').value.trim(),address:$('branchAddress').value.trim()||null,status:'Active'};
+    if(!row.profile_id)throw new Error('Sub Cafe profile निवडा.');
+    const {error}=await rdsSupabase.from('sub_cafes').insert(row);
+    if(error)throw error;
+    e.target.reset();
+    await rdsLoadSubCafes();
+    rdsMessage('Sub Cyber Cafe branch तयार झाली.');
+  }catch(err){rdsMessage('Branch save झाली नाही: '+err.message,true);}
+});
+async function rdsGetOwnSubCafeId(){
+  const {data,error}=await rdsSupabase.from('sub_cafes').select('id').eq('profile_id',rdsSession.user.id).eq('status','Active').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('तुमच्या Login साठी Active Sub Cyber Cafe branch नोंदलेली नाही. Admin शी संपर्क करा.');
+  return data.id;
+}
+function renderSubCafeDash(){
+  const body=$('subCafeWorkRows');
+  if(!body)return;
+  body.innerHTML=enquiries.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.service)+'</td><td>'+esc(x.workCode)+'</td><td>'+esc(x.status)+'</td></tr>').join('')||'<tr><td colspan="5">अद्याप काम नाही.</td></tr>';
+}
+async function rdsLoadHrDashboard(){
+  if(!rdsSupabase||rdsProfile?.role!=='hr')return;
+  const [employees,leaves]=await Promise.all([
+    rdsSupabase.from('employees').select('id,employee_code,full_name,department,designation,employment_status').order('full_name'),
+    rdsSupabase.from('leave_requests').select('id,from_date,to_date,reason,leave_status,employees(full_name,employee_code)').order('created_at',{ascending:false}).limit(200)
+  ]);
+  if(employees.error)throw employees.error;
+  if(leaves.error)throw leaves.error;
+  $('employeeRows').innerHTML=(employees.data||[]).map(x=>'<tr><td>'+esc(x.employee_code)+'</td><td>'+esc(x.full_name)+'</td><td>'+esc(x.department)+'</td><td>'+esc(x.designation||'—')+'</td><td>'+esc(x.employment_status)+'</td></tr>').join('')||'<tr><td colspan="5">Employee records अजून नाहीत.</td></tr>';
+  $('leaveRows').innerHTML=(leaves.data||[]).map(x=>'<tr><td>'+esc(x.employees?.full_name||'Employee')+' ('+esc(x.employees?.employee_code||'')+')</td><td>'+esc(x.from_date)+' – '+esc(x.to_date)+'</td><td>'+esc(x.reason)+'</td><td>'+esc(x.leave_status)+'</td><td><select onchange="rdsReviewLeave(\\''+esc(x.id)+'\\',this.value)"><option '+(x.leave_status==='Pending'?'selected':'')+'>Pending</option><option '+(x.leave_status==='Approved'?'selected':'')+'>Approved</option><option '+(x.leave_status==='Rejected'?'selected':'')+'>Rejected</option></select></td></tr>').join('')||'<tr><td colspan="5">Leave requests नाहीत.</td></tr>';
+}
+async function rdsReviewLeave(id,status){
+  const {error}=await rdsSupabase.from('leave_requests').update({leave_status:status,reviewed_by:rdsSession.user.id,reviewed_at:new Date().toISOString()}).eq('id',id);
+  if(error){alert('Leave status update failed: '+error.message);return;}
+  await rdsLoadHrDashboard();
+}
+$('employeeForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    const row={profile_id:$('employeeProfileId').value,employee_code:$('employeeCode').value.trim(),full_name:$('employeeName').value.trim(),mobile:$('employeeMobile').value.trim()||null,department:$('employeeDepartment').value,designation:$('employeeDesignation').value.trim()||null};
+    if(!row.profile_id)throw new Error('Login Profile निवडा.');
+    const {error}=await rdsSupabase.from('employees').insert(row);
+    if(error)throw error;
+    e.target.reset();
+    await rdsLoadHrDashboard();
+    rdsMessage('Employee record save झाला.');
+  }catch(err){rdsMessage('Employee save झाला नाही: '+err.message,true);}
+});
+async function rdsAssignOperator(applicationId,operatorId){
+  const {error}=await rdsSupabase.from('applications').update({assigned_staff_id:operatorId||null,status:operatorId?'Assigned':'New',updated_at:new Date().toISOString()}).eq('id',applicationId);
+  if(error){alert('Operator assign झाला नाही: '+error.message);return;}
+  if(operatorId){
+    const {error:historyError}=await rdsSupabase.from('work_assignment_history').insert({application_id:applicationId,assigned_to:operatorId,assigned_by:rdsSession.user.id,assignment_note:'Assigned by Admin'});
+    if(historyError){alert('काम assign झाले, पण assignment history save झाली नाही: '+historyError.message);}
+  }
+  await rdsRefreshApplications();
+}
 async function rdsRefreshApplications(){
   if(!rdsSupabase||!rdsSession)return;
   const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,created_by,assigned_staff_id,source_sub_cafe_id,services(name)').order('created_at',{ascending:false}).limit(300);
