@@ -606,7 +606,7 @@ const RDS_TRANSLATIONS = {
  "सेवा अर्ज, कागदपत्रे आणि कामाची स्थिती":"Service applications, documents and status","Service applications, documents and status":"सेवा अर्ज, कागदपत्रे आणि कामाची स्थिती",
  "शाखेतील ग्राहकांची कामे नोंदवा":"Manage customer requests from your branch","Manage customer requests from your branch":"शाखेतील ग्राहकांची कामे नोंदवा",
  "मंजूर कामे आणि processing queue":"Assigned work and processing queue","Assigned work and processing queue":"मंजूर कामे आणि processing queue",
- "कॅफे, कर्मचारी आणि ऑपरेशन्स":"Manage cafes, staff and operations","Manage cafes, staff and operations",
+ "कॅफे, कर्मचारी आणि ऑपरेशन्स":"Manage cafes, staff and operations","Manage cafes, staff and operations":"कॅफे, कर्मचारी आणि ऑपरेशन्स",
  "पूर्ण platform नियंत्रण":"Full platform control","Full platform control":"पूर्ण platform नियंत्रण",
  "नवीन Customer Email OTP ने नोंदणी करू शकतो. कर्मचारी व Admin खाती आधी अधिकृतपणे तयार/मंजूर असणे आवश्यक आहे.":"New customers can register using email OTP. Staff and Admin accounts must be created or approved in advance.","New customers can register using email OTP. Staff and Admin accounts must be created or approved in advance.":"नवीन Customer Email OTP ने नोंदणी करू शकतो. कर्मचारी व Admin खाती आधी अधिकृतपणे तयार/मंजूर असणे आवश्यक आहे.",
  "तुमच्या नोंदणीकृत Email वर 8 अंकी OTP पाठवला जाईल. तो OTP स्वतः येथे भरा.":"An 8-digit OTP will be sent to your registered email. Enter it here.","An 8-digit OTP will be sent to your registered email. Enter it here.":"तुमच्या नोंदणीकृत Email वर 8 अंकी OTP पाठवला जाईल. तो OTP स्वतः येथे भरा.",
@@ -620,14 +620,16 @@ const RDS_TRANSLATIONS = {
 };
 function rdsTranslateTree(root){
  if(!root)return;
+ const lang=document.documentElement.lang==='en'?'en':'mr';
+ const sourceMap=Object.fromEntries(Object.entries(RDS_TRANSLATIONS).filter(([key])=>lang==='en'?/[\u0900-\u097F]/.test(key):!/[\u0900-\u097F]/.test(key)));
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
  while((node=walker.nextNode())){
    const current=node.nodeValue,trim=current.trim();if(!trim)continue;
-   const translated=RDS_TRANSLATIONS[trim];if(translated)node.nodeValue=current.replace(trim,translated);
+   const translated=sourceMap[trim];if(translated)node.nodeValue=current.replace(trim,translated);
  }
  const elements=root.nodeType===1?[root,...root.querySelectorAll('*')]:[];
  for(const el of elements)for(const attr of ['placeholder','aria-label','title']){
-   const value=el.getAttribute(attr);if(value&&RDS_TRANSLATIONS[value])el.setAttribute(attr,RDS_TRANSLATIONS[value]);
+   const value=el.getAttribute(attr);if(value&&sourceMap[value])el.setAttribute(attr,sourceMap[value]);
  }
 }
 function setRdsLanguage(lang){
