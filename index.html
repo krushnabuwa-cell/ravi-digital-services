@@ -685,13 +685,18 @@ function setRdsLanguage(lang){
  document.getElementById('langEn')?.setAttribute('aria-pressed',String(chosen==='en'));
  rdsTranslateTree(document.body);
 }
+/* Translate newly-rendered UI without observing text edits.
+   Observing characterData caused repeated subtree scans and could freeze the page. */
 const rdsLanguageObserver=new MutationObserver(records=>{
  for(const record of records){
-  if(record.type==='childList')record.addedNodes.forEach(n=>{if(n.nodeType===1||n.nodeType===3)rdsTranslateTree(n);});
-  else if(record.type==='characterData')rdsTranslateTree(record.target.parentElement);
+  if(record.type==='childList'){
+   record.addedNodes.forEach(n=>{
+    if(n.nodeType===1||n.nodeType===3)rdsTranslateTree(n);
+   });
+  }
  }
 });
-rdsLanguageObserver.observe(document.body,{childList:true,subtree:true,characterData:true});
+rdsLanguageObserver.observe(document.body,{childList:true,subtree:true});
 const rdsSavedLanguage=localStorage.getItem('rds-language');
 if(rdsSavedLanguage==='en')setRdsLanguage('en');
 
