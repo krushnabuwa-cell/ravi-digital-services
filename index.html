@@ -104,6 +104,19 @@ body{font-family:"Manrope","Noto Sans Devanagari",system-ui,-apple-system,"Segoe
  .footer{margin-top:8px;padding:14px 12px 16px;border-radius:12px 12px 0 0}
 }
 
+
+/* Login portal dropdown: keep the menu anchored to its button and out of the nav flow */
+.topbar{overflow:visible}
+.nav{overflow:visible;flex-wrap:wrap;align-items:center}
+.portal-menu{position:relative;display:inline-flex;z-index:50;flex:0 0 auto}
+.portal-dropdown{position:absolute;top:calc(100% + 9px);left:0;right:auto;width:min(300px,88vw);max-height:min(70vh,420px);overflow-y:auto;z-index:100;background:#fff;border:1px solid var(--line);border-radius:14px;padding:7px;box-shadow:0 18px 45px #17212b24;display:grid;gap:4px}
+.portal-dropdown.hidden{display:none!important}
+.portal-dropdown button{width:100%;white-space:normal}
+@media(max-width:760px){
+ .nav{width:100%;overflow:visible;flex-wrap:wrap;gap:7px}
+ .portal-dropdown{left:0;right:auto}
+}
+
 </style></head>
 <body><div class="shell">
 <header class="topbar"><div class="brand"><div class="mark">RD</div><div>RAVI DIGITAL SERVICES<small>ONLINE DIGITAL SERVICES • NASHIK</small></div></div><nav class="nav" aria-label="मुख्य मेनू"><button id="navHome" class="active" onclick="page('home')">मुख्यपृष्ठ</button><button id="navCSC" onclick="filterCSCServices()">CSC ID सेवा</button><button id="navPartner" onclick="page('partner')">व्यवसाय भागीदारी</button><button id="navMyWork" style="display:none" onclick="page('mywork')">माझी कामे</button><button id="navTrack" onclick="page('track')">कामाची स्थिती</button><div class="portal-menu"><button id="portalMenuButton" class="portal-trigger" type="button" onclick="togglePortalMenu()" aria-expanded="false" aria-controls="portalMenu">Login Portals ▾</button><div id="portalMenu" class="portal-dropdown hidden"><button type="button" onclick="openPortalLogin('super_admin')"><b>Super Admin Login</b><small>Full platform control</small></button><button type="button" onclick="openPortalLogin('admin')"><b>Admin Login</b><small>Cafe network & operations</small></button><button type="button" onclick="openPortalLogin('backend_operator')"><b>Backend Processing Login</b><small>Assigned work & processing</small></button><button type="button" onclick="openPortalLogin('sub_cafe')"><b>Sub Cyber Cafe Login</b><small>Branch operations</small></button><button type="button" onclick="openPortalLogin('customer')"><b>Customer Login</b><small>Apply & track services</small></button></div></div><button id="navAdmin" onclick="page('admin')">Admin</button><span class="lang-switch" aria-label="Language"><button type="button" id="langMr" class="active" onclick="setRdsLanguage('mr')">मराठी</button><button type="button" id="langEn" onclick="setRdsLanguage('en')">English</button></span><label class="theme-control" aria-label="Website theme"><span>Theme</span><select id="themePicker" onchange="setRdsTheme(this.value)"><option value="terracotta">Terracotta</option><option value="ocean">Ocean Blue</option><option value="forest">Forest Green</option><option value="violet">Violet</option></select></label></nav></header>
@@ -177,6 +190,13 @@ function closePortalMenu(){
  document.getElementById('portalMenu')?.classList.add('hidden');
  document.getElementById('portalMenuButton')?.setAttribute('aria-expanded','false');
 }
+document.addEventListener('click',event=>{
+ const portal=document.querySelector('.portal-menu');
+ if(portal&&!portal.contains(event.target))closePortalMenu();
+});
+document.addEventListener('keydown',event=>{
+ if(event.key==='Escape')closePortalMenu();
+});
 function openPortalLogin(role){
  openRoleLogin(role);page('login');closePortalMenu();
 }
