@@ -213,7 +213,7 @@ async function rdsFindServiceId(serviceName){
   if(!found)throw new Error('ही सेवा Database catalog मध्ये अजून नाही. Admin ने Services मध्ये सेवा जोडावी: '+serviceName);
   return found.id;
 }
-async async function rdsCreateApplication({name,phone,serviceName,notes,govt=0,charge=0,total=0,files=[]}){
+async function rdsCreateApplication({name,phone,serviceName,notes,govt=0,charge=0,total=0,files=[]}){
   if(!rdsSession)throw new Error('आधी Email OTP ने Login करा.');
   const serviceId=await rdsFindServiceId(serviceName);
   const workId='RDS-'+Date.now().toString().slice(-8);
