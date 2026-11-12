@@ -99,7 +99,7 @@ function page(p){
   if(nav[p])$(nav[p]).classList.add('active');
   window.scrollTo(0,0);
 }
-function openService(id){function openService(id){selectedService=serviceData.find(s=>s[0]===id);$('mCategory').textContent=selectedService[2];$('mTitle').textContent=selectedService[1];$('mDesc').textContent=selectedService[3];$('mDocs').innerHTML=selectedService[4].map(d=>`<div class="check">□ ${esc(d)}</div>`).join('');showModalPrice(id);$('serviceModal').classList.add('open')}
+function openService(id){selectedService=serviceData.find(s=>s[0]===id);$('mCategory').textContent=selectedService[2];$('mTitle').textContent=selectedService[1];$('mDesc').textContent=selectedService[3];$('mDocs').innerHTML=selectedService[4].map(d=>`<div class="check">□ ${esc(d)}</div>`).join('');showModalPrice(id);$('serviceModal').classList.add('open')}
 function closeService(){$('serviceModal').classList.remove('open')}
 $('customerEnquiry').addEventListener('submit',async e=>{e.preventDefault();try{await rdsConfigPromise;if(!rdsSession){alert('Enquiry पाठवण्यासाठी आधी Mobile OTP Login करा.');closeService();page('login');return;}let files=selectedFiles('customerFiles');let p=getPrice(selectedService[0]);let app=await rdsCreateApplication({name:$('cName').value.trim(),phone:$('cPhone').value.trim(),serviceName:selectedService[1],notes:$('cDetails').value.trim(),govt:p.govt,charge:p.service,total:customerTotal(selectedService[0]),files});alert('Enquiry Database मध्ये नोंदवली! Work ID: '+app.work_id);e.target.reset();clearPreview('customerFiles','customerFilePreview','customerFileAI');closeService();await rdsRefreshApplications();if(rdsProfile?.role==='customer')page('mywork');}catch(err){alert('Enquiry save झाली नाही: '+(err.message||err));}});
 $('partnerForm').addEventListener('submit',async e=>{
@@ -233,7 +233,7 @@ function rdsShowRoleDashboard(){
   rdsRefreshApplications().catch(e=>rdsMessage('कामांची यादी लोड झाली नाही: '+e.message,true));
   rdsMessage('Customer Login यशस्वी. तुमची कामे My Work मध्ये पाहू शकता.');
 }
-async function logoutPlatform(){async function logoutPlatform(){
+async function logoutPlatform(){
   if(rdsSupabase){const {error}=await rdsSupabase.auth.signOut();if(error){rdsMessage(error.message,true);return;}}
   rdsSession=null;rdsProfile=null;rdsUpdateAdminNav();page('home');alert('Logout झाले.');
 }
@@ -278,8 +278,8 @@ async function rdsLoadProfiles(){
   const {data,error}=await rdsSupabase.from('profiles').select('id,full_name,mobile,role').order('created_at',{ascending:false}).limit(500);
   if(error)throw error;
   const roles=['customer','staff','admin','sub_cafe','backend_operator','hr'];
-  $('profileRows').innerHTML=(data||[]).map(p=>'<tr><td>'+esc(p.full_name||'—')+'<br><span class="small">'+esc(p.id)+'</span></td><td>'+esc(p.mobile||'—')+'</td><td>'+esc(p.role)+'</td><td><select onchange="rdsSetProfileRole(\\''+esc(p.id)+'\\',this.value)">'+roles.map(r=>'<option '+(p.role===r?'selected':'')+'>'+r+'</option>').join('')+'</select></td></tr>').join('');
   if(rdsProfile?.role==='admin'){
+    $('profileRows').innerHTML=(data||[]).map(p=>"<tr><td>"+esc(p.full_name||'—')+"<br><span class=\"small\">"+esc(p.id)+"</span></td><td>"+esc(p.mobile||'—')+"</td><td>"+esc(p.role)+"</td><td><select onchange=\"rdsSetProfileRole('"+esc(p.id)+"',this.value)\">"+roles.map(r=>"<option "+(p.role===r?'selected':'')+">"+r+"</option>").join('')+"</select></td></tr>").join('');
     const branchProfiles=(data||[]).filter(p=>p.role==='sub_cafe');
     $('branchProfileId').innerHTML='<option value="">Select Sub Cafe profile</option>'+branchProfiles.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.full_name||p.id)+'</option>').join('');
   }
