@@ -248,8 +248,15 @@ async function verifyLoginOtp(){
   const email=(document.getElementById('loginEmail')?.value||'').trim().toLowerCase();
   const token=(document.getElementById('loginOtp')?.value||'').trim();
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||! /^\d{6}$/.test(token)){rdsMessage('योग्य Email Address आणि 6 अंकी OTP भरा.',true);return;}
-  const {data,error}=await rdsSupabase.auth.verifyOtp({email,token,type:'email'});
-  if(error){rdsMessage(error.message,true);return;}
+  let result=await rdsSupabase.auth.verifyOtp({email,token,type:'email'});
+  // Some existing recovery OTP emails may be delivered while the login screen is open.
+  // If the email OTP check fails, also accept a valid recovery OTP for the same address.
+  if(result.error && (result.error.code==='otp_expired'||/expired or is invalid/i.test(result.error.message||''))){
+    const recoveryResult=await rdsSupabase.auth.verifyOtp({email,token,type:'recovery'});
+    if(!recoveryResult.error) result=recoveryResult;
+  }
+  const {data,error}=result;
+  if(error){rdsMessage('हा OTP वैध नाही किंवा कालबाह्य झाला आहे. नवीन OTP मागवा आणि सर्वात नवीन ईमेलमधील कोड वापरा.',true);return;}
   rdsSession=data.session;
   try{await rdsLoadProfile();rdsShowRoleDashboard();rdsMessage('Login यशस्वी.');}
   catch(e){rdsMessage('Login झाले, पण Profile वाचता आला नाही: '+e.message,true);}
