@@ -149,8 +149,13 @@ async function verifyLoginOtp(){
   try{await rdsLoadProfile();rdsShowRoleDashboard();rdsMessage('Login यशस्वी.');}
   catch(e){rdsMessage('Login झाले, पण Profile वाचता आला नाही: '+e.message,true);}
 }
+function rdsUpdateAdminNav(){
+  const adminNav=document.getElementById('navAdmin');
+  if(adminNav) adminNav.style.display=(rdsSession&&rdsProfile?.role==='admin')?'inline-flex':'none';
+}
 function rdsShowRoleDashboard(){
   if(!rdsSession||!rdsProfile)return;
+  rdsUpdateAdminNav();
   const role=rdsProfile.role;
   if(role==='admin'){page('admin');rdsRefreshApplications().catch(e=>console.error(e));rdsLoadRetailerApplications().catch(e=>console.error(e));return;}
   if(role==='staff'){$('homePage').classList.add('hidden');$('retailerPage').classList.add('hidden');$('trackPage').classList.add('hidden');$('loginPage').classList.add('hidden');$('adminPage').classList.add('hidden');$('staffDash').classList.remove('hidden');rdsRefreshApplications().catch(e=>console.error(e));return;}
@@ -160,7 +165,7 @@ function rdsShowRoleDashboard(){
 }
 async function logoutPlatform(){
   if(rdsSupabase){const {error}=await rdsSupabase.auth.signOut();if(error){rdsMessage(error.message,true);return;}}
-  rdsSession=null;rdsProfile=null;page('home');alert('Logout झाले.');
+  rdsSession=null;rdsProfile=null;rdsUpdateAdminNav();page('home');alert('Logout झाले.');
 }
 async function rdsFindServiceId(serviceName){
   const {data,error}=await rdsSupabase.from('services').select('id,name').eq('active',true);
@@ -210,6 +215,15 @@ async function rdsRefreshApplications(){
 }
 window.demoLogin=async()=>{await sendLoginOtp();};
 window.chooseRole=()=>{};
-window.page=(function(oldPage){return function(p){oldPage(p);if(p==='login'&&rdsSession)rdsShowRoleDashboard();};})(window.page);
+window.page=(function(oldPage){return function(p){
+  if(p==='admin'&&(!rdsSession||rdsProfile?.role!=='admin')){
+    rdsMessage('Admin Dashboard साठी अधिकृत Admin Login आवश्यक आहे.',true);
+    oldPage('login');
+    return;
+  }
+  oldPage(p);
+  if(p==='login'&&rdsSession)rdsShowRoleDashboard();
+};})(window.page);
+rdsUpdateAdminNav();
 </script>
 </body></html>
