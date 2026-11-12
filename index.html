@@ -80,12 +80,26 @@ function savePrice(id){let govt=Number($('pg_'+id).value),service=Number($('ps_'
 function showModalPrice(id){let p=getPrice(id);$('mGovFee').textContent=money(p.govt)+' (लागू असल्यास)';$('mServiceFee').textContent=money(p.service);$('mTotal').textContent=money(customerTotal(id));}
 let selectedService=null;
 let enquiries=JSON.parse(localStorage.getItem('rds_enquiries')||'[]');
+let operationalUsers=[];
 const $=id=>document.getElementById(id);const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function persist(){localStorage.setItem('rds_enquiries',JSON.stringify(enquiries));}
 function renderServices(){let q=$('serviceSearch').value.toLowerCase(),cat=$('serviceCategory').value;let arr=serviceData.filter(s=>(!cat||s[2]===cat)&&(!q||(s[1]+' '+s[2]+' '+s[3]).toLowerCase().includes(q)));$('serviceCount').textContent=arr.length+' सेवा';$('serviceGrid').innerHTML=arr.map(s=>`<article class="card service"><div class="symbol">▣</div><span class="tag">${esc(s[2])}</span><h3>${esc(s[1])}</h3><p>${esc(s[3])}</p><div class="price-tag">अंदाजित: ${money(customerTotal(s[0]))}</div><button class="btn primary" onclick="openService('${s[0]}')">Enquiry करा →</button></article>`).join('')||'<div class="empty">सेवा सापडली नाही.</div>'}
 function init(){let cats=[...new Set(serviceData.map(s=>s[2]))];$('serviceCategory').innerHTML+=[...cats].map(c=>`<option>${esc(c)}</option>`).join('');renderServices();renderPriceManager();$('year').textContent=new Date().getFullYear();renderAdmin();}
-function page(p){['homePage','partnerPage','trackPage','customerDash','loginPage','adminPage','staffDash'].forEach(id=>$(id).classList.add('hidden'));let map={home:'homePage',partner:'partnerPage',track:'trackPage',mywork:'customerDash',login:'loginPage',admin:'adminPage'};if(map[p])$(map[p]).classList.remove('hidden');if(p==='admin'){renderAdmin();rdsLoadPartnerEnquiries().catch(e=>console.error(e));}if(p==='mywork')renderCustomerDash();document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));let nav={home:'navHome',partner:'navPartner',mywork:'navMyWork',track:'navTrack',login:'navLogin',admin:'navAdmin'};if(nav[p])$(nav[p]).classList.add('active');window.scrollTo(0,0)}
-function openService(id){selectedService=serviceData.find(s=>s[0]===id);$('mCategory').textContent=selectedService[2];$('mTitle').textContent=selectedService[1];$('mDesc').textContent=selectedService[3];$('mDocs').innerHTML=selectedService[4].map(d=>`<div class="check">□ ${esc(d)}</div>`).join('');showModalPrice(id);$('serviceModal').classList.add('open')}
+function page(p){
+  ['homePage','partnerPage','trackPage','customerDash','loginPage','adminPage','staffDash','subCafeDash','hrDash'].forEach(id=>$(id).classList.add('hidden'));
+  const map={home:'homePage',partner:'partnerPage',track:'trackPage',mywork:'customerDash',login:'loginPage',admin:'adminPage',staff:'staffDash',subcafe:'subCafeDash',hr:'hrDash'};
+  if(map[p])$(map[p]).classList.remove('hidden');
+  if(p==='admin'){renderAdmin();rdsLoadPartnerEnquiries().catch(e=>console.error(e));rdsLoadProfiles().catch(e=>console.error(e));rdsLoadSubCafes().catch(e=>console.error(e));rdsLoadOperationalUsers().catch(e=>console.error(e));}
+  if(p==='mywork')renderCustomerDash();
+  if(p==='staff')rdsRefreshApplications().catch(e=>console.error(e));
+  if(p==='subcafe')rdsRefreshApplications().catch(e=>console.error(e));
+  if(p==='hr')rdsLoadHrDashboard().catch(e=>console.error(e));
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));
+  let nav={home:'navHome',partner:'navPartner',mywork:'navMyWork',track:'navTrack',login:'navLogin',admin:'navAdmin'};
+  if(nav[p])$(nav[p]).classList.add('active');
+  window.scrollTo(0,0);
+}
+function openService(id){function openService(id){selectedService=serviceData.find(s=>s[0]===id);$('mCategory').textContent=selectedService[2];$('mTitle').textContent=selectedService[1];$('mDesc').textContent=selectedService[3];$('mDocs').innerHTML=selectedService[4].map(d=>`<div class="check">□ ${esc(d)}</div>`).join('');showModalPrice(id);$('serviceModal').classList.add('open')}
 function closeService(){$('serviceModal').classList.remove('open')}
 $('customerEnquiry').addEventListener('submit',async e=>{e.preventDefault();try{await rdsConfigPromise;if(!rdsSession){alert('Enquiry पाठवण्यासाठी आधी Mobile OTP Login करा.');closeService();page('login');return;}let files=selectedFiles('customerFiles');let p=getPrice(selectedService[0]);let app=await rdsCreateApplication({name:$('cName').value.trim(),phone:$('cPhone').value.trim(),serviceName:selectedService[1],notes:$('cDetails').value.trim(),govt:p.govt,charge:p.service,total:customerTotal(selectedService[0]),files});alert('Enquiry Database मध्ये नोंदवली! Work ID: '+app.work_id);e.target.reset();clearPreview('customerFiles','customerFilePreview','customerFileAI');closeService();await rdsRefreshApplications();if(rdsProfile?.role==='customer')page('mywork');}catch(err){alert('Enquiry save झाली नाही: '+(err.message||err));}});
 $('partnerForm').addEventListener('submit',async e=>{
@@ -200,13 +214,15 @@ function rdsShowRoleDashboard(){
   if(!rdsSession||!rdsProfile)return;
   rdsUpdateAdminNav();
   const role=rdsProfile.role;
-  if(role==='admin'){page('admin');rdsRefreshApplications().catch(e=>console.error(e));rdsLoadPartnerEnquiries().catch(e=>console.error(e));return;}
-  if(role==='staff'){$('homePage').classList.add('hidden');$('partnerPage').classList.add('hidden');$('trackPage').classList.add('hidden');$('loginPage').classList.add('hidden');$('adminPage').classList.add('hidden');$('staffDash').classList.remove('hidden');rdsRefreshApplications().catch(e=>console.error(e));return;}
+  if(role==='admin'){page('admin');rdsRefreshApplications().catch(e=>console.error(e));return;}
+  if(role==='staff'||role==='backend_operator'){page('staff');return;}
+  if(role==='sub_cafe'){page('subcafe');return;}
+  if(role==='hr'){page('hr');return;}
   page('mywork');
   rdsRefreshApplications().catch(e=>rdsMessage('कामांची यादी लोड झाली नाही: '+e.message,true));
   rdsMessage('Customer Login यशस्वी. तुमची कामे My Work मध्ये पाहू शकता.');
 }
-async function logoutPlatform(){
+async function logoutPlatform(){async function logoutPlatform(){
   if(rdsSupabase){const {error}=await rdsSupabase.auth.signOut();if(error){rdsMessage(error.message,true);return;}}
   rdsSession=null;rdsProfile=null;rdsUpdateAdminNav();page('home');alert('Logout झाले.');
 }
@@ -248,13 +264,14 @@ async function rdsSetPartnerEnquiryStatus(id,status){
 }
 async function rdsRefreshApplications(){
   if(!rdsSupabase||!rdsSession)return;
-  const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,created_by,services(name)').order('created_at',{ascending:false}).limit(300);
+  const {data,error}=await rdsSupabase.from('applications').select('id,work_id,customer_name,customer_mobile,status,government_fee,service_charge,total_amount,notes,created_at,created_by,assigned_staff_id,source_sub_cafe_id,services(name)').order('created_at',{ascending:false}).limit(300);
   if(error)throw error;
-  enquiries=(data||[]).map(x=>({id:x.id,workCode:x.work_id,createdBy:x.created_by,date:new Date(x.created_at).toLocaleString('en-IN'),name:x.customer_name,phone:x.customer_mobile,service:x.services?.name||'Service',city:'',details:x.notes||'',status:x.status,govtFee:Number(x.government_fee)||0,serviceCharge:Number(x.service_charge)||0,customerTotal:Number(x.total_amount)||0,documents:[]}));
+  enquiries=(data||[]).map(x=>({id:x.id,workCode:x.work_id,createdBy:x.created_by,assignedStaffId:x.assigned_staff_id,sourceSubCafeId:x.source_sub_cafe_id,date:new Date(x.created_at).toLocaleString('en-IN'),name:x.customer_name,phone:x.customer_mobile,service:x.services?.name||'Service',city:'',details:x.notes||'',status:x.status,govtFee:Number(x.government_fee)||0,serviceCharge:Number(x.service_charge)||0,customerTotal:Number(x.total_amount)||0,documents:[]}));
   renderAdmin();
   if(rdsProfile?.role==='customer')renderCustomerDash();
   
-  if(rdsProfile?.role==='staff')renderStaff();
+  if(rdsProfile?.role==='staff'||rdsProfile?.role==='backend_operator')renderStaff();
+  if(rdsProfile?.role==='sub_cafe')renderSubCafeDash();
 }
 window.demoLogin=async()=>{await sendLoginOtp();};
 window.chooseRole=()=>{};
