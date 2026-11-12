@@ -357,15 +357,57 @@ function renderSubCafeDash(){
   if(!body)return;
   body.innerHTML=enquiries.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.service)+'</td><td>'+esc(x.workCode)+'</td><td>'+esc(x.status)+'</td></tr>').join('')||'<tr><td colspan="5">अद्याप काम नाही.</td></tr>';
 }
+async function rdsGetOwnEmployeeId(){
+  const {data,error}=await rdsSupabase.from('employees').select('id').eq('profile_id',rdsSession.user.id).maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('तुमचा Employee Profile HR ने अजून तयार केलेला नाही.');
+  return data.id;
+}
+async function rdsMarkAttendance(action){
+  try{
+    const employeeId=await rdsGetOwnEmployeeId();
+    const now=new Date();
+    const today=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');
+    const {data:existing,error:readError}=await rdsSupabase.from('attendance').select('id,check_in,check_out').eq('employee_id',employeeId).eq('attendance_date',today).maybeSingle();
+    if(readError)throw readError;
+    if(action==='in'){
+      if(existing?.check_in)throw new Error('आजचे Clock In आधीच नोंदले आहे.');
+      const {error}=await rdsSupabase.from('attendance').insert({employee_id:employeeId,attendance_date:today,check_in:now.toISOString(),attendance_status:'Present'});
+      if(error)throw error;
+      $('attendanceMessage').textContent='Clock In नोंदवले: '+now.toLocaleTimeString('en-IN');
+    }else{
+      if(!existing?.check_in)throw new Error('आधी Clock In करा.');
+      if(existing?.check_out)throw new Error('आजचे Clock Out आधीच नोंदले आहे.');
+      const {error}=await rdsSupabase.from('attendance').update({check_out:now.toISOString()}).eq('id',existing.id);
+      if(error)throw error;
+      $('attendanceMessage').textContent='Clock Out नोंदवले: '+now.toLocaleTimeString('en-IN');
+    }
+  }catch(err){rdsMessage('Attendance update झाले नाही: '+err.message,true);}
+}
+$('leaveForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+    const employeeId=await rdsGetOwnEmployeeId();
+    const row={employee_id:employeeId,from_date:$('leaveFrom').value,to_date:$('leaveTo').value,reason:$('leaveReason').value.trim()};
+    if(row.to_date<row.from_date)throw new Error('To Date ही From Date नंतरची असावी.');
+    const {error}=await rdsSupabase.from('leave_requests').insert(row);
+    if(error)throw error;
+    e.target.reset();
+    rdsMessage('Leave request HR कडे पाठवली.');
+  }catch(err){rdsMessage('Leave request पाठवता आली नाही: '+err.message,true);}
+});
 async function rdsLoadHrDashboard(){
   if(!rdsSupabase||!['hr','admin'].includes(rdsProfile?.role))return;
-  const [employees,leaves]=await Promise.all([
+  const [employees,leaves,attendance]=await Promise.all([
     rdsSupabase.from('employees').select('id,employee_code,full_name,department,designation,employment_status').order('full_name'),
-    rdsSupabase.from('leave_requests').select('id,from_date,to_date,reason,leave_status,employees(full_name,employee_code)').order('created_at',{ascending:false}).limit(200)
+    rdsSupabase.from('leave_requests').select('id,from_date,to_date,reason,leave_status,employees(full_name,employee_code)').order('created_at',{ascending:false}).limit(200),
+    rdsSupabase.from('attendance').select('id,attendance_date,check_in,check_out,attendance_status,employees(full_name,employee_code)').order('attendance_date',{ascending:false}).limit(300)
   ]);
   if(employees.error)throw employees.error;
   if(leaves.error)throw leaves.error;
+  if(attendance.error)throw attendance.error;
   $('employeeRows').innerHTML=(employees.data||[]).map(x=>'<tr><td>'+esc(x.employee_code)+'</td><td>'+esc(x.full_name)+'</td><td>'+esc(x.department)+'</td><td>'+esc(x.designation||'—')+'</td><td>'+esc(x.employment_status)+'</td></tr>').join('')||'<tr><td colspan="5">Employee records अजून नाहीत.</td></tr>';
+  $('attendanceRows').innerHTML=(attendance.data||[]).map(x=>'<tr><td>'+esc(x.employees?.full_name||'Employee')+' ('+esc(x.employees?.employee_code||'')+')</td><td>'+esc(x.attendance_date)+'</td><td>'+esc(x.check_in?new Date(x.check_in).toLocaleTimeString('en-IN'):'—')+'</td><td>'+esc(x.check_out?new Date(x.check_out).toLocaleTimeString('en-IN'):'—')+'</td><td>'+esc(x.attendance_status)+'</td></tr>').join('')||'<tr><td colspan="5">Attendance records नाहीत.</td></tr>';
   $('leaveRows').innerHTML=(leaves.data||[]).map(x=>'<tr><td>'+esc(x.employees?.full_name||'Employee')+' ('+esc(x.employees?.employee_code||'')+')</td><td>'+esc(x.from_date)+' – '+esc(x.to_date)+'</td><td>'+esc(x.reason)+'</td><td>'+esc(x.leave_status)+'</td><td><select onchange="rdsReviewLeave(\\''+esc(x.id)+'\\',this.value)"><option '+(x.leave_status==='Pending'?'selected':'')+'>Pending</option><option '+(x.leave_status==='Approved'?'selected':'')+'>Approved</option><option '+(x.leave_status==='Rejected'?'selected':'')+'>Rejected</option></select></td></tr>').join('')||'<tr><td colspan="5">Leave requests नाहीत.</td></tr>';
 }
 async function rdsReviewLeave(id,status){
