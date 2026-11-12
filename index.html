@@ -76,7 +76,7 @@ function getPrice(serviceId){return priceConfig[serviceId]||{govt:0,service:50,}
 function money(n){return '₹'+Number(n||0).toLocaleString('en-IN');}
 function customerTotal(serviceId){let p=getPrice(serviceId);return Number(p.govt||0)+Number(p.service||0);}
 function renderPriceManager(){let body=$('priceRows');if(!body)return;body.innerHTML=serviceData.map(s=>{let p=getPrice(s[0]);return `<tr><td>${esc(s[1])}</td><td><input type="number" min="0" step="1" id="pg_${s[0]}" value="${Number(p.govt)||0}"></td><td><input type="number" min="0" step="1" id="ps_${s[0]}" value="${Number(p.service)||0}"></td><td><b>${money(customerTotal(s[0]))}</b></td><td><button class="btn light" onclick="savePrice('${s[0]}')">Save</button></td></tr>`}).join('');}
-function savePrice(id){let govt=Number($('pg_'+id).value),service=Number($('ps_'+id).value);if(govt<0||service<0){alert('कृपया योग्य किंमत भरा.');return;}priceConfig[id]={govt,service};localStorage.setItem('rds_prices',JSON.stringify(priceConfig));renderPriceManager();renderServices();if(selectedService&&selectedService[0]===id)showModalPrice(id);alert('किंमत save झाली (या browser च्या demo मध्ये).');}
+async function savePrice(id){let govt=Number($('pg_'+id).value),service=Number($('ps_'+id).value);if(govt<0||service<0){alert('कृपया योग्य किंमत भरा.');return;}try{if(rdsSupabase&&rdsProfile?.role==='admin'){const name=serviceData.find(s=>s[0]===id)?.[1];const serviceId=await rdsFindServiceId(name);const {error}=await rdsSupabase.from('services').update({government_fee:govt,service_charge:service}).eq('id',serviceId);if(error)throw error;}priceConfig[id]={govt,service};localStorage.setItem('rds_prices',JSON.stringify(priceConfig));renderPriceManager();renderServices();if(selectedService&&selectedService[0]===id)showModalPrice(id);alert('किंमत Database मध्ये save झाली.');}catch(err){alert('किंमत save झाली नाही: '+err.message);}}
 function showModalPrice(id){let p=getPrice(id);$('mGovFee').textContent=money(p.govt)+' (लागू असल्यास)';$('mServiceFee').textContent=money(p.service);$('mTotal').textContent=money(customerTotal(id));}
 let selectedService=null;
 let enquiries=JSON.parse(localStorage.getItem('rds_enquiries')||'[]');
@@ -101,7 +101,7 @@ function page(p){
 }
 function openService(id){selectedService=serviceData.find(s=>s[0]===id);$('mCategory').textContent=selectedService[2];$('mTitle').textContent=selectedService[1];$('mDesc').textContent=selectedService[3];$('mDocs').innerHTML=selectedService[4].map(d=>`<div class="check">□ ${esc(d)}</div>`).join('');showModalPrice(id);$('serviceModal').classList.add('open')}
 function closeService(){$('serviceModal').classList.remove('open')}
-$('customerEnquiry').addEventListener('submit',async e=>{e.preventDefault();try{await rdsConfigPromise;if(!rdsSession){alert('Enquiry पाठवण्यासाठी आधी Mobile OTP Login करा.');closeService();page('login');return;}let files=selectedFiles('customerFiles');let p=getPrice(selectedService[0]);let app=await rdsCreateApplication({name:$('cName').value.trim(),phone:$('cPhone').value.trim(),serviceName:selectedService[1],notes:$('cDetails').value.trim(),govt:p.govt,charge:p.service,total:customerTotal(selectedService[0]),files});alert('Enquiry Database मध्ये नोंदवली! Work ID: '+app.work_id);e.target.reset();clearPreview('customerFiles','customerFilePreview','customerFileAI');closeService();await rdsRefreshApplications();if(rdsProfile?.role==='customer')page('mywork');}catch(err){alert('Enquiry save झाली नाही: '+(err.message||err));}});
+$('customerEnquiry').addEventListener('submit',async e=>{e.preventDefault();try{await rdsConfigPromise;await rdsLoadServicePricing();if(!rdsSession){alert('Enquiry पाठवण्यासाठी आधी Mobile OTP Login करा.');closeService();page('login');return;}let files=selectedFiles('customerFiles');let p=getPrice(selectedService[0]);let app=await rdsCreateApplication({name:$('cName').value.trim(),phone:$('cPhone').value.trim(),serviceName:selectedService[1],notes:$('cDetails').value.trim(),govt:p.govt,charge:p.service,total:customerTotal(selectedService[0]),files});alert('Enquiry Database मध्ये नोंदवली! Work ID: '+app.work_id);e.target.reset();clearPreview('customerFiles','customerFilePreview','customerFileAI');closeService();await rdsRefreshApplications();if(rdsProfile?.role==='customer')page('mywork');}catch(err){alert('Enquiry save झाली नाही: '+(err.message||err));}});
 $('partnerForm').addEventListener('submit',async e=>{
   e.preventDefault();
   try{
@@ -245,6 +245,19 @@ async function rdsFindServiceId(serviceName){
   if(!found)throw new Error('ही सेवा Database catalog मध्ये अजून नाही. Admin ने Services मध्ये सेवा जोडावी: '+serviceName);
   return found.id;
 }
+async function rdsLoadServicePricing(){
+  if(!rdsSupabase)return;
+  const {data,error}=await rdsSupabase.from('services').select('name,government_fee,service_charge').eq('active',true);
+  if(error)throw error;
+  for(const service of serviceData){
+    const found=(data||[]).find(x=>String(x.name).trim().toLowerCase()===String(service[1]).trim().toLowerCase());
+    if(found)priceConfig[service[0]]={govt:Number(found.government_fee)||0,service:Number(found.service_charge)||0};
+  }
+  localStorage.setItem('rds_prices',JSON.stringify(priceConfig));
+  renderServices();
+  renderPriceManager();
+}
+rdsConfigPromise.then(ok=>{if(ok)rdsLoadServicePricing().catch(e=>console.error('Service pricing:',e));});
 async function rdsCreateApplication({name,phone,serviceName,notes,govt=0,charge=0,total=0,files=[],sourceSubCafeId=null}){
   if(!rdsSession)throw new Error('आधी Email OTP ने Login करा.');
   const serviceId=await rdsFindServiceId(serviceName);
@@ -322,6 +335,7 @@ $('subCafeForm').addEventListener('submit',async e=>{
 $('subCafeWorkForm').addEventListener('submit',async e=>{
   e.preventDefault();
   try{
+    await rdsLoadServicePricing();
     const branchId=await rdsGetOwnSubCafeId();
     const serviceName=$('branchWorkService').value;
     const price=getPrice(serviceData.find(s=>s[1]===serviceName)?.[0]||'');
