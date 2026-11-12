@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ravi-digital-services.vercel.app/sitemap.xml
